@@ -12,6 +12,33 @@ button{cursor:pointer}button:disabled{opacity:.55;cursor:wait}
 .chartPanel h3{margin:0 0 3px;font-size:15px}.chartPanel p{margin:0 0 10px;font-size:12px;color:#718096}
 .chartCanvas{width:100%;height:280px}.chartCanvasTall{min-height:270px}
 .totalRow{font-weight:700;background:#f1f6fa}
+.internshipOverview{overflow:hidden;border-color:#d9e5ee;background:linear-gradient(155deg,#ffffff 5%,#f2f8fc 100%)}
+.overviewHeader{padding:6px 4px 12px;align-items:flex-start;gap:20px}
+.overviewHeader h2{font-size:24px;letter-spacing:-.035em;color:#0b2d4d;margin:5px 0}
+.overviewHeader p{max-width:670px;line-height:1.5}
+.eyebrow{font-size:11px;font-weight:800;letter-spacing:.16em;color:#1681a5}
+.visibleCount{flex:none;border:1px solid #cfe2ec;border-radius:12px;padding:10px 16px;color:#0b5f91;background:#fff;font-size:22px;font-weight:800}
+.visibleCount small{font-size:12px;color:#718096;font-weight:500}
+.internshipOverview .filters{padding:12px;border-radius:13px;background:#e9f1f7;margin:0 0 18px}
+.internshipOverview .filters select,.internshipOverview .search{background:white;min-height:40px}
+.internshipOverview .filters select{max-width:250px}
+.internshipKpis .card{border-radius:13px;position:relative;padding-left:18px;border-left:4px solid #3183ac}
+.internshipKpis .kpi-cubiertos{border-left-color:#168365}.internshipKpis .kpi-en-gestión{border-left-color:#e0a83c}.internshipKpis .kpi-vacantes{border-left-color:#d86565}
+.internshipKpis .kpi span{font-size:12px;font-weight:700;color:#526779}.internshipKpis .kpi strong{font-size:34px}
+.chartPanel{background:white;box-shadow:0 8px 22px #1439550a}.chartPanel h3{color:#123852}
+.sectionHeading{font-size:16px;color:#123852;margin:22px 0 10px}
+.internshipOverview table tbody tr:hover,.internshipTable tbody tr:hover{background:#f3f8fb}
+.slotCode{display:inline-block;min-width:42px;text-align:center;background:#e8f3fa;color:#0b5f91;border-radius:7px;padding:6px 8px}
+.internshipTable td{vertical-align:middle}.internshipTable th{background:#f6f9fc}
+.trafficLegend{display:flex;flex-wrap:wrap;gap:8px 18px;padding:10px 13px;margin:0 0 12px;border:1px solid #e2e9ef;border-radius:10px;background:#f7fafc;color:#526477;font-size:12px}
+.trafficLegend span{display:inline-flex;align-items:center;gap:6px}
+.trafficDot{display:inline-block;flex:none;width:9px;height:9px;border-radius:50%;background:#94a3b8;box-shadow:0 0 0 3px #94a3b826}
+.trafficDot.red{background:#d53b45;box-shadow:0 0 0 3px #d53b4529}.trafficDot.yellow{background:#e7b422;box-shadow:0 0 0 3px #e7b42235}
+.trafficDot.orange{background:#e98538;box-shadow:0 0 0 3px #e9853830}.trafficDot.green{background:#16a267;box-shadow:0 0 0 3px #16a26726}
+.trafficBadge{display:inline-flex;align-items:center;gap:9px;border-radius:9px;padding:7px 10px;background:#f1f5f9;color:#556477;font-weight:700;font-size:12px;white-space:nowrap}
+.trafficBadge span{display:flex;flex-direction:column;gap:2px}.trafficBadge small{font-size:10px;font-weight:600;opacity:.78}
+.trafficBadge.red{background:#fff0f1;color:#a72b36}.trafficBadge.yellow{background:#fff8df;color:#88630c}
+.trafficBadge.orange{background:#fff3e8;color:#aa541b}.trafficBadge.green{background:#eaf8f0;color:#166844}
 .search{min-width:min(350px,100%)}.search input{width:100%}
 .history,.group{padding:13px 0;border-bottom:1px solid #e8edf3}
 .history b,.history span,.history small,.group b,.group small{display:block;margin-bottom:5px}
@@ -38,4 +65,5 @@ button{cursor:pointer}button:disabled{opacity:.55;cursor:wait}
 .formGrid textarea{min-height:75px}.modal .primary{margin-top:12px}
 @media(max-width:900px){.kanban{grid-template-columns:repeat(5,220px)}}
 @media(max-width:900px){.internshipCharts{grid-template-columns:1fr}}
+@media(max-width:520px){.overviewHeader{flex-direction:column}.visibleCount{font-size:18px}.internshipOverview .filters select,.internshipOverview .search{width:100%;max-width:none}.chartPanel{padding:10px}.trafficLegend{gap:8px 12px}}
 @media(max-width:520px){.termGrid,.formGrid{grid-template-columns:1fr}.headerActions .user{display:none}}
