@@ -1,41 +1,35 @@
-# Gestión DPP · SCIT
+# SCIT Gestión DPP
 
-PWA para la Dirección de Planificación y Proyectos del Servicio de Catastro e Información Territorial. Prototipo preparado para GitHub + Supabase y posterior migración a servidor institucional Linux/Docker/PostgreSQL.
+Aplicación React/Vite de la Dirección de Planificación y Proyectos del Servicio de Catastro e Información Territorial de Santa Fe. Los datos se consultan en Supabase; no se muestran registros ficticios.
 
-## Módulos
-1. Dashboard ejecutivo.
-2. Banco de Proyectos: cartera, avance, hitos, riesgos, responsables, presupuesto y documentación.
-3. Pasantías: 47 cupos fijos (S01–S24 Santa Fe; R01–R23 Rosario), ocupación actual e historial, antecedentes normativos, convocatorias, designaciones, vacantes, convenios 12+6 meses y alertas 120/90/60/30 días.
-4. Agenda de Comunicación Institucional: calendario, piezas, canales, públicos, responsables, aprobaciones y publicación.
-5. Usuarios y permisos: Director, Coordinador, Administrativo y Solo lectura mediante Supabase Auth + RLS.
+## Funciones
 
-## Puesta en marcha local (Windows)
-1. Instalar Node.js LTS y Git (Docker no es necesario para este prototipo).
-2. Descomprimir/clonar el repo.
-3. En la carpeta: `npm install`.
-4. Crear `.env` copiando `.env.example` y completar URL + clave publicable de Supabase.
-5. En Supabase > SQL Editor ejecutar `supabase/migrations/001_initial.sql`.
-6. En Supabase > Authentication crear el primer usuario.
-7. En SQL Editor asignarle perfil Director: `insert into public.profiles(id,full_name,role) values ('UUID-DEL-USUARIO','Nombre','director');`
-8. Ejecutar `npm run dev`.
+- Pasantías: 47 cupos fijos (S01–S24 en Santa Fe y R01–R23 en Rosario), pasantes, antecedentes normativos, designaciones, historial, convenio inicial de 12 meses, renovación única de 6 meses, cierre de asignaciones y alertas de vencimiento a 120/90/60/30 días.
+- Banco de Proyectos: cartera, tablero Kanban, límite WIP de cinco tareas en proceso, responsables, fechas, dependencias con protección contra ciclos, objetivos y resultados clave (OKR), indicadores, riesgos e hitos.
+- Agenda de comunicación: acciones, fechas, responsables, canales y aprobación.
+- Usuarios: invitación por correo a cargo del Director, roles y desactivación de perfiles. Cada invitado ingresa inicialmente con permiso de solo lectura.
+- Auditoría: cambios de proyectos, pasantías, comunicación, perfiles y dependencias, visibles únicamente para el Director.
 
-Si no se crea `.env`, la app abre en modo demostración con datos ficticios para presentar el concepto.
+## Desarrollo y despliegue
 
-## GitHub
-Subir todos los archivos excepto `.env`. El `.gitignore` ya lo excluye. Para prototipo público, desplegar el frontend en Vercel/Netlify/Cloudflare Pages conectando el repo y configurar allí `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
+Usar Node.js 22. Ejecutar npm ci y npm run dev. npm run build comprueba TypeScript y genera la PWA. El repositorio incluye .env.production con la URL y la clave publicable de este proyecto; nunca colocar una clave secreta o service_role en el cliente. Para otros entornos, configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en .env.local.
 
-## Seguridad
-La clave `service_role` de Supabase NUNCA debe ir en GitHub ni en el navegador. La clave publicable sí puede estar en variables del frontend porque la protección real está en RLS. Para producción institucional se recomienda endurecer políticas por módulo, MFA/SSO si está disponible, logs de auditoría, backups y HTTPS.
+Las nueve migraciones en supabase/migrations corresponden a las ya aplicadas al proyecto iwouqdqoaurhqxdulnxh; no ejecutar de nuevo las migraciones históricas sobre ese proyecto. Para una base nueva, aplicarlas en orden. La función supabase/functions/invite-user/index.ts está desplegada con validación JWT y comprueba en el servidor que el solicitante sea Director activo.
 
-## Migración institucional
-La app evita dependencia fuerte de hosting: frontend React/Vite y datos PostgreSQL. La base de Supabase puede exportarse y restaurarse en PostgreSQL institucional. En una fase de producción puede incorporarse una API Node/TypeScript dentro de Docker para tareas privilegiadas, notificaciones programadas y auditoría avanzada.
+El flujo de GitHub Actions compila y despliega GitHub Pages desde main. En Settings → Pages → Build and deployment, la fuente debe ser GitHub Actions. En Supabase Auth → URL Configuration, agregar https://martinezdiegoe-ux.github.io/scit-gestion-dpp/ como URL de redirección de invitación y recuperación de contraseña.
 
-## Próximas tareas en Work
-- Reemplazar datos demo por consultas Supabase reales.
-- CRUD completo de los tres módulos.
-- Ficha de cupo con timeline histórico y documentos.
-- Automatización de alertas 90 días (correo + panel) mediante cron/Edge Function.
-- Exportación PDF/Excel e informes ejecutivos.
-- Matriz granular de permisos por módulo/acción.
-- Auditoría automática por triggers.
-- Carga inicial desde planillas existentes.
+## Primer acceso
+
+El proyecto todavía no tiene usuarios Auth. Crear el primer usuario en Supabase Authentication → Users (o invitarlo desde el panel). El trigger crea automáticamente un perfil lectura. Después de verificar su identidad, asignar el rol inicial de Director en SQL Editor:
+
+    update public.profiles
+    set role = 'director'
+    where id = (select id from auth.users where email = 'CORREO_INSTITUCIONAL_VERIFICADO');
+
+No promover por correo sin verificar la cuenta correcta. A partir de allí, el Director puede invitar otros usuarios y asignarles roles desde la aplicación. No se eliminaron ni reemplazaron los 47 cupos institucionales.
+
+## Permisos
+
+Las políticas RLS exigen perfil activo para leer datos. Director, Coordinador y Administrativo pueden cargar y actualizar; solo Director puede borrar y administrar perfiles. Solo lectura consulta. Las operaciones de pasantías se ejecutan en transacciones de la base y sus triggers impiden superposiciones, segundas renovaciones y plazos superiores a 12 + 6 meses. Las vistas de alertas usan security_invoker.
+
+La función de invitación envía correo sólo cuando el Director pulsa Invitar usuario. No se ha enviado invitación ni creado cuenta durante esta actualización.
