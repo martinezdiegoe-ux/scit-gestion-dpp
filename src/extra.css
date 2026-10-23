@@ -6,6 +6,12 @@ button{cursor:pointer}button:disabled{opacity:.55;cursor:wait}
 .titleRow h2,.titleRow h3{display:flex;align-items:center;gap:8px}
 .kpi{display:block}.kpi strong{display:block;font-size:30px;margin:4px 0;color:#0b2d4d}
 .filters{margin-bottom:14px}.filters select,.lane select{padding:9px;border:1px solid #dbe3eb;border-radius:9px;background:#fff}
+.internshipKpis{margin:0 0 16px}.internshipKpis .card{margin:0;background:#f7fafc;box-shadow:none}
+.internshipCharts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px;margin:4px 0 22px}
+.chartPanel{min-width:0;border:1px solid #e5eaf0;border-radius:12px;padding:15px}
+.chartPanel h3{margin:0 0 3px;font-size:15px}.chartPanel p{margin:0 0 10px;font-size:12px;color:#718096}
+.chartCanvas{width:100%;height:280px}.chartCanvasTall{min-height:270px}
+.totalRow{font-weight:700;background:#f1f6fa}
 .search{min-width:min(350px,100%)}.search input{width:100%}
 .history,.group{padding:13px 0;border-bottom:1px solid #e8edf3}
 .history b,.history span,.history small,.group b,.group small{display:block;margin-bottom:5px}
@@ -31,4 +37,5 @@ button{cursor:pointer}button:disabled{opacity:.55;cursor:wait}
 .formGrid input,.formGrid select,.formGrid textarea{font:inherit;padding:10px;border:1px solid #d7e0e9;border-radius:8px;min-width:0}
 .formGrid textarea{min-height:75px}.modal .primary{margin-top:12px}
 @media(max-width:900px){.kanban{grid-template-columns:repeat(5,220px)}}
+@media(max-width:900px){.internshipCharts{grid-template-columns:1fr}}
 @media(max-width:520px){.termGrid,.formGrid{grid-template-columns:1fr}.headerActions .user{display:none}}
