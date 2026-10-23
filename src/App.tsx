@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useState} from 'react';
 import {Bell,BriefcaseBusiness,CalendarDays,Download,GraduationCap,LayoutDashboard,LogOut,RefreshCw,ShieldCheck,Users} from 'lucide-react';
-import {supabase,configured} from './lib/supabase';
+import {supabase,configured,initialInviteLink} from './lib/supabase';
 import {emptyData,loadData,type DataState,type Row} from './lib/data';
 import Internships from './Internships';
 import Projects from './Projects';
@@ -13,7 +13,7 @@ const Card=({title,value,sub}:{title:string;value:number|string;sub:string})=><d
 export default function App(){
  const[tab,setTab]=useState<Tab>('dashboard'),[session,setSession]=useState<any>(null),[ready,setReady]=useState(false);
  const[email,setEmail]=useState(''),[password,setPassword]=useState(''),[loginError,setLoginError]=useState('');
- const[recovery,setRecovery]=useState(false),[newPassword,setNewPassword]=useState('');
+ const[recovery,setRecovery]=useState(initialInviteLink),[newPassword,setNewPassword]=useState('');
  const[installPrompt,setInstallPrompt]=useState<any>(null),[installHelp,setInstallHelp]=useState(false);
  useEffect(()=>{const available=(event:Event)=>{event.preventDefault();setInstallPrompt(event)};const installed=()=>{setInstallPrompt(null);setInstallHelp(false)};window.addEventListener('beforeinstallprompt',available);window.addEventListener('appinstalled',installed);return()=>{window.removeEventListener('beforeinstallprompt',available);window.removeEventListener('appinstalled',installed)}},[]);
  const[profile,setProfile]=useState<Row|null>(null),[data,setData]=useState<DataState>(emptyData),[loading,setLoading]=useState(false),[error,setError]=useState('');
