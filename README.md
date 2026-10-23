@@ -20,16 +20,14 @@ El flujo de GitHub Actions compila y despliega GitHub Pages desde main. En Setti
 
 ## Primer acceso
 
-El proyecto todavía no tiene usuarios Auth. Crear el primer usuario en Supabase Authentication → Users (o invitarlo desde el panel). El trigger crea automáticamente un perfil lectura. Después de verificar su identidad, asignar el rol inicial de Director en SQL Editor:
+Diego Eduardo Martinez y Juan Pablo Marin recibieron invitaciones en sus respectivos correos. Ambos perfiles están activos con rol Director para esta etapa de pruebas. El enlace de invitación abre la aplicación y permite elegir la contraseña inicial. Si el enlace caducó, usar **Recuperar contraseña** en la pantalla de ingreso. El acceso posterior es con correo y contraseña.
 
-    update public.profiles
-    set role = 'director'
-    where id = (select id from auth.users where email = 'CORREO_INSTITUCIONAL_VERIFICADO');
+La pantalla de ingreso incluye **Instalar aplicación**. En navegadores compatibles abre el aviso de instalación; en iPhone o iPad se agrega desde Compartir → Agregar a inicio.
 
-No promover por correo sin verificar la cuenta correcta. A partir de allí, el Director puede invitar otros usuarios y asignarles roles desde la aplicación. No se eliminaron ni reemplazaron los 47 cupos institucionales.
+Desde la aplicación, un Director puede invitar usuarios nuevos y asignarles roles. Las nuevas invitaciones reciben inicialmente permiso de solo lectura. No se eliminaron ni reemplazaron los 47 cupos institucionales.
 
 ## Permisos
 
 Las políticas RLS exigen perfil activo para leer datos. Director, Coordinador y Administrativo pueden cargar y actualizar; solo Director puede borrar y administrar perfiles. Solo lectura consulta. Las operaciones de pasantías se ejecutan en transacciones de la base y sus triggers impiden superposiciones, segundas renovaciones y plazos superiores a 12 + 6 meses. Las vistas de alertas usan security_invoker.
 
-La función de invitación envía correo sólo cuando el Director pulsa Invitar usuario. No se ha enviado invitación ni creado cuenta durante esta actualización.
+La función de invitación envía correo sólo cuando el Director pulsa Invitar usuario. Las dos cuentas iniciales se invitaron desde el panel de Supabase y se validaron por identificador y correo antes de asignarles el rol Director.
