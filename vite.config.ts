@@ -7,7 +7,7 @@ export default defineConfig({
  plugins:[react(),VitePWA({registerType:'autoUpdate',manifest:{
   name:'Gestión DPP · SCIT',short_name:'DPP SCIT',
   description:'Sistema de Gestión Estratégica de la Dirección de Planificación y Proyectos',
-  theme_color:'#0b2d4d',background_color:'#f4f7fb',display:'standalone',
+  theme_color:'#0b2d4d',background_color:'#f4f7fb',display:'standalone',lang:'es',
   start_url:base,scope:base,icons:[{src:base+'icon-192.png',sizes:'192x192',type:'image/png'},{src:base+'icon-512.png',sizes:'512x512',type:'image/png',purpose:'any maskable'}]
  }})]
 });
