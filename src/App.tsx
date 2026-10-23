@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useState} from 'react';
-import {Bell,BriefcaseBusiness,CalendarDays,GraduationCap,LayoutDashboard,LogOut,RefreshCw,ShieldCheck,Users} from 'lucide-react';
+import {Bell,BriefcaseBusiness,CalendarDays,Download,GraduationCap,LayoutDashboard,LogOut,RefreshCw,ShieldCheck,Users} from 'lucide-react';
 import {supabase,configured} from './lib/supabase';
 import {emptyData,loadData,type DataState,type Row} from './lib/data';
 import Internships from './Internships';
@@ -14,6 +14,8 @@ export default function App(){
  const[tab,setTab]=useState<Tab>('dashboard'),[session,setSession]=useState<any>(null),[ready,setReady]=useState(false);
  const[email,setEmail]=useState(''),[password,setPassword]=useState(''),[loginError,setLoginError]=useState('');
  const[recovery,setRecovery]=useState(false),[newPassword,setNewPassword]=useState('');
+ const[installPrompt,setInstallPrompt]=useState<any>(null),[installHelp,setInstallHelp]=useState(false);
+ useEffect(()=>{const available=(event:Event)=>{event.preventDefault();setInstallPrompt(event)};const installed=()=>{setInstallPrompt(null);setInstallHelp(false)};window.addEventListener('beforeinstallprompt',available);window.addEventListener('appinstalled',installed);return()=>{window.removeEventListener('beforeinstallprompt',available);window.removeEventListener('appinstalled',installed)}},[]);
  const[profile,setProfile]=useState<Row|null>(null),[data,setData]=useState<DataState>(emptyData),[loading,setLoading]=useState(false),[error,setError]=useState('');
  useEffect(()=>{if(!supabase){setReady(true);return}supabase.auth.getSession().then(({data,error})=>{if(error)setLoginError(error.message);setSession(data.session);setReady(true)});
  const{data:listener}=supabase.auth.onAuthStateChange((event,s)=>{setSession(s);setProfile(null);if(event==='PASSWORD_RECOVERY')setRecovery(true)});return()=>listener.subscription.unsubscribe()},[]);
@@ -26,7 +28,7 @@ export default function App(){
  async function reset(){if(!supabase||!email){setLoginError('Escribí tu correo primero');return}const{error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+window.location.pathname});setLoginError(error?error.message:'Si existe la cuenta, recibirás un correo de recuperación.')}
  if(!ready)return <div className="center">Preparando sesión…</div>;
  if(!configured)return <div className="center error">Falta configurar Supabase.</div>;
- if(!session)return <div className="login"><form onSubmit={login}><div className="seal big">SCIT</div><h1>Gestión DPP</h1><p>Dirección de Planificación y Proyectos</p><label>Correo<input type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Contraseña<input type="password" required value={password} onChange={e=>setPassword(e.target.value)}/></label>{loginError&&<p className="error" role="status">{loginError}</p>}<button>Ingresar</button><button type="button" className="linkButton" onClick={reset}>Recuperar contraseña</button></form></div>;
+ if(!session)return <div className="login"><form onSubmit={login}><div className="seal big">SCIT</div><h1>Gestión DPP</h1><p>Dirección de Planificación y Proyectos</p><label>Correo<input type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Contraseña<input type="password" required value={password} onChange={e=>setPassword(e.target.value)}/></label>{loginError&&<p className="error" role="status">{loginError}</p>}<button>Ingresar</button><button type="button" className="linkButton" onClick={reset}>Recuperar contraseña</button><button type="button" className="linkButton" onClick={async()=>{if(installPrompt){await installPrompt.prompt();setInstallPrompt(null)}else setInstallHelp(v=>!v)}}><Download size={16}/> Instalar aplicación</button>{installHelp&&<p className="muted" role="status">En iPhone o iPad: Compartir → Agregar a inicio. En Chrome o Edge: menú ⋮ → Instalar aplicación. Si ya está instalada, abrila desde el inicio.</p>}</form></div>;
  if(recovery)return <div className="login"><form onSubmit={async e=>{e.preventDefault();const{error}=await supabase!.auth.updateUser({password:newPassword});if(error)setLoginError(error.message);else{setRecovery(false);setLoginError('')}}}><h1>Nueva contraseña</h1><p>Elegí una contraseña segura para tu cuenta institucional.</p><label>Contraseña nueva<input type="password" minLength={8} required value={newPassword} onChange={e=>setNewPassword(e.target.value)}/></label>{loginError&&<p className="error">{loginError}</p>}<button>Guardar contraseña</button></form></div>;
  const canEdit=Boolean(profile?.active&&profile.role!=='lectura'),director=profile?.role==='director';
  const alerts=data.alerts.filter(a=>a.days_remaining<=120);
