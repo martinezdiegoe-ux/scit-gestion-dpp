@@ -73,14 +73,17 @@ Deno.serve(async req => {
     const results=[];
     for (const row of (rows||[]) as Row[]) {
       try {
-        const response=await fetch(queryUrl(row),{headers:{'Accept':'text/html'},signal:AbortSignal.timeout(40000)});
+        const response=await fetch(queryUrl(row),{headers:{'Accept':'text/html'},signal:AbortSignal.timeout(8000)});
         if (!response.ok) throw Error(`Consulta oficial: HTTP ${response.status}`);
         const fields=parse(await response.text(),row.number);
         const {error:ue}=await db.from('tracked_expedients').update({...fields,last_checked_at:new Date().toISOString(),last_error:null,updated_at:new Date().toISOString()}).eq('id',row.id);
         if (ue) throw ue;
         results.push({id:row.id,ok:true});
       } catch (e) {
-        const message=e instanceof Error?e.message:String(e);
+        const raw=e instanceof Error?e.message:String(e);
+        const message=/timed out|timeout|abort/i.test(raw)
+          ? 'El sitio de expedientes de Santa Fe no respondió al servidor. Abrí «Ver fuente» y registrá el último pase con «Editar datos»; la consulta automática se reintentará.'
+          : raw;
         await db.from('tracked_expedients').update({last_checked_at:new Date().toISOString(),last_error:message}).eq('id',row.id);
         results.push({id:row.id,ok:false,error:message});
       }
