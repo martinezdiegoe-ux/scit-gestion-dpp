@@ -3,19 +3,19 @@ import { supabase } from './supabase';
 export type Row = Record<string, any>;
 export type DataState = {
   slots: Row[]; interns: Row[]; assignments: Row[]; terms: Row[]; acts: Row[];
-  projects: Row[]; tasks: Row[]; objectives: Row[]; keyResults: Row[];
+  bank: Row[]; projects: Row[]; tasks: Row[]; objectives: Row[]; keyResults: Row[];
   indicators: Row[]; risks: Row[]; milestones: Row[]; dependencies: Row[];
   communication: Row[]; profiles: Row[]; audit: Row[]; alerts: Row[];
 };
 export const emptyData: DataState = {
   slots: [], interns: [], assignments: [], terms: [], acts: [],
-  projects: [], tasks: [], objectives: [], keyResults: [], indicators: [],
+  bank: [], projects: [], tasks: [], objectives: [], keyResults: [], indicators: [],
   risks: [], milestones: [], dependencies: [], communication: [],
   profiles: [], audit: [], alerts: []
 };
 const tables: Record<keyof DataState, string> = {
   slots:'internship_slots', interns:'interns', assignments:'internship_assignments',
-  terms:'internship_terms', acts:'normative_acts', projects:'projects',
+  terms:'internship_terms', acts:'normative_acts', bank:'project_bank', projects:'projects',
   tasks:'project_tasks', objectives:'project_objectives', keyResults:'project_key_results',
   indicators:'project_indicators', risks:'project_risks', milestones:'project_milestones',
   dependencies:'project_task_dependencies', communication:'communication_items',
@@ -26,7 +26,7 @@ export async function loadData(isDirector: boolean): Promise<DataState> {
   const client = supabase;
   const keys = (Object.keys(tables) as (keyof DataState)[]).filter(k => isDirector || k !== 'audit');
   const results = await Promise.all(keys.map(async key => {
-    const order = key === 'slots' ? 'code' : key === 'alerts' ? 'end_date' :
+    const order = key === 'slots' ? 'code' : key === 'bank' ? 'source_number' : key === 'alerts' ? 'end_date' :
       key === 'milestones' ? 'due_date' : key === 'dependencies' ? 'task_id' : 'created_at';
     const { data, error } = await client.from(tables[key]).select('*')
       .order(order, { ascending: key !== 'audit' && key !== 'alerts', nullsFirst: false });
