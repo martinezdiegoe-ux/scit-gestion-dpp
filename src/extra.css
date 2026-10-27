@@ -71,6 +71,7 @@ button{cursor:pointer}button:disabled{opacity:.55;cursor:wait}
 :root{--app-bg:#f3f6fa;--surface:#fff;--panel:#f5f8fb;--text:#172235;--muted:#718096;--border:#dce4ec;--accent:#265f91}
 :root[data-theme=dark]{--app-bg:#0f1729;--surface:#1a2740;--panel:#202f4a;--text:#f0f4fb;--muted:#aebbd0;--border:#354662;--accent:#b9a3ff;color-scheme:dark}
 :root[data-theme=dark] .kpi strong{color:#f0f4fb}
+:root[data-theme=dark] .headerActions .user{background:var(--surface);border-color:var(--border);color:var(--text)}
 body{background:var(--app-bg);color:var(--text)}.app{background:var(--app-bg);color:var(--text)}
 .card{background:var(--surface);border-color:var(--border);color:var(--text)}.muted,.card>p,.titleRow p,header small,.kpi span,.kpi small{color:var(--muted)}
 .ghost{background:var(--surface);border-color:var(--border);color:var(--text)}
