@@ -1,0 +1,4 @@
+# El cron se autentica con un token secreto del Vault; los usuarios con Auth.
+# La función valida ambos caminos antes de leer o modificar expedientes.
+[functions.refresh-expedients]
+verify_jwt = false
