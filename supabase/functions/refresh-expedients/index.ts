@@ -17,11 +17,16 @@ function text(html: string) {
 }
 function parse(html:string, number:string) {
   const section = html.match(/<div class="ui-bg-2">([\s\S]*)/i)?.[1] ?? html;
-  if (!new RegExp(`Expediente:\\s*${number.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(text(section))) throw Error('La consulta oficial no devolvió el expediente solicitado');
+  const listedNumber = number.startsWith('EE-') ? number : number.replace(/-/g, ' - ');
+  if (!text(section).includes(`Expediente: ${listedNumber}`)) throw Error('La consulta oficial no devolvió el expediente solicitado');
   const field = (label:string) => {
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const value = section.match(new RegExp(`<div[^>]*>\\s*${escaped}:?\\s*<\\/div>\\s*<div[^>]*>([\\s\\S]*?)<\\/div>`, 'i'))?.[1];
-    return value ? text(value) : null;
+    const match = section.match(new RegExp(`<div[^>]*>\\s*${escaped}:?\\s*<\\/div>\\s*<div[^>]*>([\\s\\S]*?)<\\/div>`, 'i'));
+    if (!match) return null;
+    const continuation = ['Remitente','Destino'].includes(label)
+      ? section.slice((match.index||0)+match[0].length).match(/^\s*<\/div>\s*<div class="row">\s*<div[^>]*style="float:right;"[^>]*>([\s\S]*?)<\/div>/i)?.[1]
+      : null;
+    return [text(match[1]),continuation&&text(continuation)].filter(Boolean).join(' - ');
   };
   const rawDate = field('Fecha pase');
   if (!rawDate || !field('Destino')) throw Error('La respuesta oficial no incluye el último pase');
@@ -34,14 +39,15 @@ function parse(html:string, number:string) {
     started_at:date(field('Fecha inicio')), current_office:field('Destino'),
     previous_office:field('Remitente'), last_transfer_at:date(rawDate) };
 }
-function queryUrl(row:Row) {
+function queryRequest(row:Row) {
   if (row.kind==='PAPEL') {
     const m=row.number.match(/^(\d{3,8})-(\d{1,12})-(\d)$/);
     if (!m) throw Error('Formato papel inválido');
-    return `${source}sie?mesa=${m[1]}&numero=${m[2]}&digito=${m[3]}`;
+    return {url:`${source}sie`,body:new URLSearchParams({mesa:m[1],numero:m[2],digito:m[3],iniciar:'Buscar'})};
   }
   if (!/^EE-\d{4}-\d{8}-APPSF-[A-Z0-9]+$/.test(row.number)) throw Error('Formato digital inválido');
-  return `${source}expediente-timbo/?expediente=${encodeURIComponent(row.number)}`;
+  const [,year,number,office]=row.number.match(/^EE-(\d{4})-(\d{8})-APPSF-([A-Z0-9]+)$/)!;
+  return {url:`${source}expediente-timbo/`,body:new URLSearchParams({anioTimbo:year,numeroTimbo:number,tipoReparticion:'APPSF',reparticionTimbo:office,tipoTimbo:'EX',buscarTimbo:'Buscar'})};
 }
 Deno.serve(async req => {
   if (req.method==='OPTIONS') return new Response(null,{headers:cors});
@@ -73,7 +79,9 @@ Deno.serve(async req => {
     const results=[];
     for (const row of (rows||[]) as Row[]) {
       try {
-        const response=await fetch(queryUrl(row),{headers:{'Accept':'text/html'},signal:AbortSignal.timeout(8000)});
+        const request=queryRequest(row);
+        const response=await fetch(request.url,{method:'POST',body:request.body,
+          headers:{'Accept':'text/html','Content-Type':'application/x-www-form-urlencoded'},signal:AbortSignal.timeout(12000)});
         if (!response.ok) throw Error(`Consulta oficial: HTTP ${response.status}`);
         const fields=parse(await response.text(),row.number);
         const {error:ue}=await db.from('tracked_expedients').update({...fields,last_checked_at:new Date().toISOString(),last_error:null,updated_at:new Date().toISOString()}).eq('id',row.id);
@@ -84,7 +92,7 @@ Deno.serve(async req => {
         const message=/timed out|timeout|abort/i.test(raw)
           ? 'El sitio de expedientes de Santa Fe no respondió al servidor. Abrí «Ver fuente» y registrá el último pase con «Editar datos»; la consulta automática se reintentará.'
           : raw;
-        await db.from('tracked_expedients').update({last_checked_at:new Date().toISOString(),last_error:message}).eq('id',row.id);
+        await db.from('tracked_expedients').update({last_error:message}).eq('id',row.id);
         results.push({id:row.id,ok:false,error:message});
       }
     }
