@@ -1,12 +1,11 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
+import {HttpError,corsHeaders,jsonReply,readJson,consumeBudget} from '../_shared/security.ts';
 
 const projectUrl = Deno.env.get('SUPABASE_URL')!;
 const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-const service = createClient(projectUrl, serviceKey);
+const service = createClient(projectUrl, serviceKey,{auth:{persistSession:false,autoRefreshToken:false}});
 const source = 'https://www.santafe.gov.ar/expedientes-web/';
-const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type' };
-const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 type Row = { id:string; number:string; kind:'PAPEL'|'DIGITAL'; status:string };
 
 function text(html: string) {
@@ -50,52 +49,56 @@ function queryRequest(row:Row) {
   return {url:`${source}expediente-timbo/`,body:new URLSearchParams({anioTimbo:year,numeroTimbo:number,tipoReparticion:'APPSF',reparticionTimbo:office,tipoTimbo:'EX',buscarTimbo:'Buscar'})};
 }
 Deno.serve(async req => {
-  if (req.method==='OPTIONS') return new Response(null,{headers:cors});
-  if (req.method!=='POST') return reply({error:'Método inválido'},405);
+  let headers:Record<string,string>={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
   try {
-    const body=await req.json();
-    const cron = typeof body.cron_token==='string';
+    headers=corsHeaders(req);
+    if(req.method==='OPTIONS')return new Response(null,{headers});
+    if(req.method!=='POST')throw new HttpError(405,'Método no permitido');
+    const body=await readJson(req);
+    const cron=typeof body.cron_token==='string';
     let userClient;
-    if (cron) {
+    if(cron){
       const {data,error}=await service.rpc('scit_verify_expedient_cron_token',{provided:body.cron_token});
-      if (error || data!==true) return reply({error:'No autorizado'},401);
-    } else {
+      if(error||data!==true)throw new HttpError(401,'No autorizado');
+      await consumeBudget(service,'cron','refresh-expedients-cron');
+    }else{
       const authorization=req.headers.get('Authorization')||'';
-      const token=authorization.replace(/^Bearer\s+/i,'');
-      if (!token) return reply({error:'Sesión requerida'},401);
-      userClient=createClient(projectUrl,anonKey,{global:{headers:{Authorization:authorization}}});
+      const token=authorization.match(/^Bearer\s+(\S+)$/i)?.[1];
+      if(!token)throw new HttpError(401,'Sesión requerida');
+      userClient=createClient(projectUrl,anonKey,{global:{headers:{Authorization:authorization}},auth:{persistSession:false,autoRefreshToken:false}});
       const {data:{user},error}=await userClient.auth.getUser(token);
-      if (error || !user) return reply({error:'Sesión inválida'},401);
-      const {data:profile,error:pe}=await userClient.from('profiles').select('role,active').eq('id',user.id).single();
-      if (pe || !profile?.active || !['director','coordinador','administrativo'].includes(profile.role)) return reply({error:'Sin permiso de actualización'},403);
-      if (body.id && typeof body.id!=='string') return reply({error:'ID inválido'},400);
+      if(error||!user)throw new HttpError(401,'Sesión inválida');
+      const {data:role,error:pe}=await userClient.rpc('my_role');
+      if(pe||!['director','coordinador','administrativo'].includes(role))throw new HttpError(403,'Sin permiso de actualización');
+      await consumeBudget(service,user.id,'refresh-expedients');
+      if(typeof body.id!=='string'||! /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.id))throw new HttpError(400,'ID inválido');
     }
     const db=cron?service:userClient!;
     const list=db.from('tracked_expedients').select('id,number,kind,status').eq('status','ACTIVO');
-    if (!cron) list.eq('id',body.id||'00000000-0000-0000-0000-000000000000');
+    if(!cron)list.eq('id',body.id);
     const {data:rows,error}=await list;
-    if (error) throw error;
-    if (!cron && rows?.length!==1) return reply({error:'Expediente no encontrado'},404);
+    if(error)throw new HttpError(503,'No se pudieron consultar los expedientes');
+    if(!cron&&rows?.length!==1)throw new HttpError(404,'Expediente no encontrado');
     const results=[];
-    for (const row of (rows||[]) as Row[]) {
-      try {
+    for(const row of (rows||[]) as Row[]){
+      try{
         const request=queryRequest(row);
         const response=await fetch(request.url,{method:'POST',body:request.body,
           headers:{'Accept':'text/html','Content-Type':'application/x-www-form-urlencoded'},signal:AbortSignal.timeout(12000)});
-        if (!response.ok) throw Error(`Consulta oficial: HTTP ${response.status}`);
+        if(!response.ok)throw Error('Consulta oficial no disponible');
         const fields=parse(await response.text(),row.number);
         const {error:ue}=await db.from('tracked_expedients').update({...fields,last_checked_at:new Date().toISOString(),last_error:null,updated_at:new Date().toISOString()}).eq('id',row.id);
-        if (ue) throw ue;
+        if(ue)throw ue;
         results.push({id:row.id,ok:true});
-      } catch (e) {
-        const raw=e instanceof Error?e.message:String(e);
-        const message=/timed out|timeout|abort/i.test(raw)
-          ? 'El sitio de expedientes de Santa Fe no respondió al servidor. Abrí «Ver fuente» y registrá el último pase con «Editar datos»; la consulta automática se reintentará.'
-          : raw;
+      }catch{
+        const message='No se pudo verificar el último pase en la fuente oficial. Abrí «Ver fuente» para comprobarlo y registrarlo manualmente.';
         await db.from('tracked_expedients').update({last_error:message}).eq('id',row.id);
         results.push({id:row.id,ok:false,error:message});
       }
     }
-    return reply({results});
-  } catch(e) { return reply({error:e instanceof Error?e.message:String(e)},500); }
+    return jsonReply({results},200,headers);
+  }catch(e){
+    const failure=e instanceof HttpError?e:new HttpError(500,'No se pudo procesar la actualización');
+    return jsonReply({error:failure.message},failure.status,headers,failure.retryAfter);
+  }
 });

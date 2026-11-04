@@ -2,6 +2,7 @@ import {useEffect,useState} from 'react';
 import {Download,FileUp,Phone,UserRound} from 'lucide-react';
 import type {Row} from './lib/data';
 import {supabase} from './lib/supabase';
+import {safeExternalUrl} from './lib/safeUrl';
 
 type Category='CONVOCATORIA'|'DESIGNACION'|'BAJA'|'CONVENIO_INICIAL'|'CONVENIO_RENOVACION'|'OTRO';
 const categories:Record<Category,string>={CONVOCATORIA:'Resolución de convocatoria',DESIGNACION:'Resolución de designación',BAJA:'Resolución de baja',CONVENIO_INICIAL:'Convenio individual inicial',CONVENIO_RENOVACION:'Convenio de renovación',OTRO:'Otro documento'};
@@ -10,7 +11,7 @@ const safeName=(name:string)=>name.normalize('NFD').replace(/[\u0300-\u036f]/g,'
 export default function InternshipAssets({slot,intern,assignment,terms,acts,canEdit,onEdit,onChanged}: {slot:Row;intern?:Row;assignment?:Row;terms:Row[];acts:Row[];canEdit:boolean;onEdit:()=>void;onChanged:()=>Promise<void>}){
  const[files,setFiles]=useState<Row[]>([]),[photo,setPhoto]=useState(''),[category,setCategory]=useState<Category>('CONVOCATORIA'),[title,setTitle]=useState(''),[uploading,setUploading]=useState(false),[error,setError]=useState('');
  useEffect(()=>{let alive=true;async function load(){if(!supabase)return;const{data,error}=await supabase.from('internship_files').select('*').eq('slot_id',slot.id).order('created_at',{ascending:false});if(alive){if(error)setError(error.message);else setFiles(data||[])}}void load();return()=>{alive=false}},[slot.id]);
- useEffect(()=>{let alive=true;async function load(){if(!supabase||!intern?.photo_path){setPhoto('');return}const{data}=await supabase.storage.from(bucket).createSignedUrl(intern.photo_path,3600);if(alive)setPhoto(data?.signedUrl||'')}void load();return()=>{alive=false}},[intern?.photo_path]);
+ useEffect(()=>{let alive=true;async function load(){if(!supabase||!intern?.photo_path){setPhoto('');return}const{data}=await supabase.storage.from(bucket).createSignedUrl(intern.photo_path,300);if(alive)setPhoto(data?.signedUrl||'')}void load();return()=>{alive=false}},[intern?.photo_path]);
  const phone=String(intern?.phone||'').replace(/[^\d+]/g,'');
  const linked=[['CONVOCATORIA',assignment?.call_act_id],['DESIGNACION',assignment?.designation_act_id],['BAJA',assignment?.vacancy_act_id],...terms.map(t=>[t.kind==='INICIAL_12'?'CONVENIO_INICIAL':'CONVENIO_RENOVACION',t.act_id])] as [Category,string|undefined][];
  async function upload(file:File,kind:'document'|'photo'){
@@ -23,7 +24,7 @@ export default function InternshipAssets({slot,intern,assignment,terms,acts,canE
    try{
     if(kind==='photo'){
      const{error:save}=await supabase.from('interns').update({photo_path:path}).eq('id',intern!.id);if(save)throw save;
-     const{data}=await supabase.storage.from(bucket).createSignedUrl(path,3600);setPhoto(data?.signedUrl||'');await onChanged();
+     const{data}=await supabase.storage.from(bucket).createSignedUrl(path,300);setPhoto(data?.signedUrl||'');await onChanged();
     }else{
      const term=category==='CONVENIO_INICIAL'?terms.find(t=>t.kind==='INICIAL_12'):category==='CONVENIO_RENOVACION'?terms.find(t=>t.kind==='RENOVACION_6'):undefined;
      const actId=category==='CONVOCATORIA'?assignment?.call_act_id:category==='DESIGNACION'?assignment?.designation_act_id:category==='BAJA'?assignment?.vacancy_act_id:term?.act_id;
@@ -40,5 +41,5 @@ export default function InternshipAssets({slot,intern,assignment,terms,acts,canE
  <div className="assetHeader"><h3>Resoluciones y convenios</h3><small>Archivos privados · máximo 10 MB por archivo</small></div>
  {canEdit&&<div className="assetForm"><label>Tipo de documento<select value={category} onChange={e=>setCategory(e.target.value as Category)}>{Object.entries(categories).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label><label>Descripción<input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Número o descripción (opcional)"/></label><label className="assetUpload"><FileUp size={17}/> {uploading?'Subiendo…':'Adjuntar PDF o imagen'}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" disabled={uploading} onChange={e=>{const f=e.target.files?.[0];if(f)void upload(f,'document');e.target.value=''}}/></label></div>}
  {error&&<p className="error" role="alert">{error}</p>}
- <div className="assetList">{Object.entries(categories).map(([key,label])=>{const docs=files.filter(f=>f.category===key);const links=linked.filter(([cat])=>cat===key).map(([,id])=>acts.find(a=>a.id===id)).filter((a):a is Row=>Boolean(a?.url));return <div className="assetGroup" key={key}><strong>{label}</strong>{docs.map(f=><div className="assetItem" key={f.id}><button className="ghost" onClick={()=>void download(f.storage_path,f.storage_path.split('/').pop()?.replace(/^[0-9a-f-]{36}-/,'')||f.title)}><Download size={16}/>{f.title}</button>{canEdit&&<button className="ghost" onClick={()=>void remove(f)} aria-label={`Quitar ${f.title}`}>Quitar</button>}</div>)}{links.map(a=><a className="ghost" key={a.id} href={a.url} target="_blank" rel="noopener noreferrer"><Download size={16}/>{a.title||`${a.number||''}/${a.year||''}`}</a>)}{!docs.length&&!links.length&&<span className="muted">Pendiente de adjuntar</span>}</div>})}</div></div>
+ <div className="assetList">{Object.entries(categories).map(([key,label])=>{const docs=files.filter(f=>f.category===key);const links=linked.filter(([cat])=>cat===key).map(([,id])=>acts.find(a=>a.id===id)).filter((a):a is Row=>Boolean(safeExternalUrl(a?.url)));return <div className="assetGroup" key={key}><strong>{label}</strong>{docs.map(f=><div className="assetItem" key={f.id}><button className="ghost" onClick={()=>void download(f.storage_path,f.storage_path.split('/').pop()?.replace(/^[0-9a-f-]{36}-/,'')||f.title)}><Download size={16}/>{f.title}</button>{canEdit&&<button className="ghost" onClick={()=>void remove(f)} aria-label={`Quitar ${f.title}`}>Quitar</button>}</div>)}{links.map(a=><a className="ghost" key={a.id} href={safeExternalUrl(a.url)} target="_blank" rel="noopener noreferrer"><Download size={16}/>{a.title||`${a.number||''}/${a.year||''}`}</a>)}{!docs.length&&!links.length&&<span className="muted">Pendiente de adjuntar</span>}</div>})}</div></div>
 }

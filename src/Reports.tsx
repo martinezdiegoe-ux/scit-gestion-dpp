@@ -1,47 +1,14 @@
 import {useMemo,useState} from 'react';
 import type {DataState,Row} from './lib/data';
+import {monthlyRows,createRrhhSheet,rrhhOptions,rrhhFileOptions} from './lib/rrhhWorkbook';
 
 const months=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const date=(s?:string|null)=>s?`${s.slice(8,10)}/${s.slice(5,7)}/${s.slice(0,4)}`:'';
 const filename=(name:string,blob:Blob)=>{const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)};
-const excelDate=(value?:string|null)=>value?new Date(`${value}T12:00:00Z`):null;
-const sortCode=(a:Row,b:Row)=>a.code.localeCompare(b.code,'es',{numeric:true});
-type ReportRow={assignment:Row;slot:Row;intern:Row;term?:Row;act?:Row;status:string;news:string};
-
-export function monthlyRows(data:DataState,month:string){
- const start=month+'-01',end=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),0)).toISOString().slice(0,10);
- const rows:ReportRow[]=data.assignments.flatMap(assignment=>{
-  const finish=assignment.ended_at&&assignment.ended_at<assignment.end_date?assignment.ended_at:assignment.end_date;
-  if(assignment.start_date>end||finish<start)return [];
-  const slot=data.slots.find(s=>s.id===assignment.slot_id),intern=data.interns.find(i=>i.id===assignment.intern_id);
-  if(!slot||!intern)return [];
-  const terms=data.terms.filter(t=>t.assignment_id===assignment.id).sort((a,b)=>a.start_date.localeCompare(b.start_date));
-  const term=terms.find(t=>t.start_date<=end&&t.end_date>=end)||terms.filter(t=>t.start_date<=end&&t.end_date>=start).at(-1);
-  const news=[assignment.start_date>=start?'Alta':'',assignment.ended_at>=start&&assignment.ended_at<=end?'Baja':'',terms.some(t=>t.kind==='RENOVACION_6'&&t.start_date>=start&&t.start_date<=end)?'Renovación':''].filter(Boolean).join(', ');
-  return [{assignment,slot,intern,term,act:data.acts.find(a=>a.id===assignment.designation_act_id),status:assignment.ended_at&&assignment.ended_at<=end?'Baja':'Vigente',news}];
- });
- return rows.sort((a,b)=>sortCode(a.slot,b.slot)||a.assignment.start_date.localeCompare(b.assignment.start_date));
-}
-
 async function downloadRrhh(data:DataState,month:string,amount:string){
- const {default:ExcelJS}=await import('exceljs');
- const rows=monthlyRows(data,month),workbook=new ExcelJS.Workbook();workbook.creator='SCIT · Dirección de Planificación y Proyectos';
- const sheet=workbook.addWorksheet('PASANTES',{views:[{state:'frozen',ySplit:3}],pageSetup:{orientation:'landscape',paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0}});
- sheet.addRow(['N° ORDEN','RESOLUCIÓN','','','DEPENDENCIA','FUNCION / TAREA','PERSONA','','VINCULACIÓN','FECHA DE VENCIMIENTO (--/--/--)','PLAZO (meses)','ASIGNACIÓN (mensual)','CASA DE ESTUDIOS','MARCO LEGAL','OBSERVACIÓN','JURISDICCION','BASE']);
- sheet.mergeCells('B1:D1');sheet.mergeCells('G1:H1');
- sheet.addRow(['','N°','ESTADO','FECHA (--/--/--)','','','DNI','APELLIDO Y NOMBRE']);
- sheet.addRow([]);
- const fee=amount.trim()?Number(amount):null;
- rows.forEach((r,index)=>{
-  const {assignment:a,intern:i,term:t,act}=r;
-  const observation=[r.news,a.notes?.includes('verificar')?'Inicio de convenio pendiente de verificar':'',!act?.number?'Resolución de designación sin número':'',!t?'Convenio sin etapa registrada':''].filter(Boolean).join('; ');
-  const row=sheet.addRow([index+1,act?.number?`Res. ${act.number}${act.year?'/'+String(act.year).slice(-2):''}`:'',r.status,excelDate(act?.act_date), 'S.C.I.T', 'Aux- Tec. Adm',i.dni||'',i.full_name,t?.kind==='RENOVACION_6'?'Renovación':'1° Instancia',excelDate(t?.end_date||a.end_date),t?.kind==='RENOVACION_6'?6:12,fee,i.university||'','Ley 26427',observation,'Ministerio de Economía',`${months[Number(month.slice(5,7))-1]} ${month.slice(0,4)}`]);
-  row.getCell(4).numFmt='dd/mm/yyyy';row.getCell(10).numFmt='dd/mm/yyyy';row.getCell(12).numFmt='#,##0.00';
-  row.eachCell(c=>{c.border={bottom:{style:'hair',color:{argb:'FFCDD6E4'}}};c.alignment={vertical:'middle',wrapText:true}});row.height=30;
- });
- sheet.columns.forEach((column,index)=>column.width=[10,18,14,16,16,22,16,29,16,19,14,20,20,16,42,24,19][index]);
- [1,2,3].forEach(n=>{const row=sheet.getRow(n);row.height=n===1?35:28;row.eachCell({includeEmpty:true},cell=>{cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:n===1?'FF0D2847':'FFDBE6F3'}};cell.font={bold:true,color:{argb:n===1?'FFFFFFFF':'FF0D2847'},size:10};cell.alignment={vertical:'middle',horizontal:'center',wrapText:true}})});
- const buffer=await workbook.xlsx.writeBuffer();filename(`RRHH-pasantes-${month}.xlsx`,new Blob([buffer as ArrayBuffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+ const {default:writeExcelFile}=await import('write-excel-file/browser');
+ const blob=await writeExcelFile(createRrhhSheet(data,month,amount),rrhhOptions,rrhhFileOptions).toBlob();
+ filename(`RRHH-pasantes-${month}.xlsx`,blob);
 }
 
 async function downloadStatistics(data:DataState){
