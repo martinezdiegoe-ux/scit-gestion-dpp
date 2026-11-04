@@ -1,11 +1,12 @@
-import {useEffect,useMemo,useState} from 'react';
-import {CalendarDays,ChevronLeft,ChevronRight,Download,ImagePlus,MapPin} from 'lucide-react';
+import {useEffect,useMemo,useRef,useState} from 'react';
+import {CalendarDays,ChevronLeft,ChevronRight,Download,RefreshCw} from 'lucide-react';
 import type {DataState,Row} from './lib/data';
-import {Editor,dateText,save,type Field} from './Editor';
+import {dateText,type Field} from './Editor';
 import {supabase} from './lib/supabase';
 
 type Props={data:DataState;canEdit:boolean;reload:()=>Promise<void>};
-const bucket='scit-communication';
+import {CommunicationEditor,CommunicationImage,ImagePicker,UploadStatus} from './CommunicationImages';
+import {COMMUNICATION_BUCKET as bucket,uploadCommunicationImages,uploadMessage,type UploadInput,type UploadProgress} from './lib/communicationAssets';
 const pad=(n:number)=>String(n).padStart(2,'0');
 const dateKey=(d:Date)=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const monthKey=(d:Date)=>dateKey(d).slice(0,7);
@@ -24,7 +25,10 @@ export default function Communication({data,canEdit,reload}:Props){
  const today=dateKey(new Date());
  const[month,setMonth]=useState(()=>monthKey(new Date()));
  const[day,setDay]=useState<string|null>(null),[type,setType]=useState(''),[editor,setEditor]=useState<Row|null|false>(false);
- const[expanded,setExpanded]=useState<string|null>(null),[assets,setAssets]=useState<Row[]>([]),[urls,setUrls]=useState<Record<string,string>>({}),[busy,setBusy]=useState(''),[error,setError]=useState('');
+ const[expanded,setExpanded]=useState<string|null>(null),[assets,setAssets]=useState<Row[]>([]),[busy,setBusy]=useState(''),[error,setError]=useState('');
+ const [notice,setNotice]=useState(''),[progress,setProgress]=useState<UploadProgress|null>(null),[failed,setFailed]=useState<Record<string,UploadInput[]>>({});
+ const uploadLock=useRef(false);
+ const addAsset=(row:Row)=>setAssets(current=>[row,...current.filter(asset=>asset.id!==row.id)]);
  const items=useMemo(()=>[...data.communication].sort((a,b)=>`${a.target_date||'9999'} ${a.target_time||''}`.localeCompare(`${b.target_date||'9999'} ${b.target_time||''}`)),[data.communication]);
  const filtered=items.filter(i=>!type||i.item_type===type);
  const [year,m]=month.split('-').map(Number);
@@ -35,22 +39,53 @@ export default function Communication({data,canEdit,reload}:Props){
  const upcoming=filtered.filter(i=>i.target_date>=today&&i.status!=='CANCELADO').slice(0,3);
  const monthTitle=first.toLocaleDateString('es-AR',{month:'long',year:'numeric'});
  function changeMonth(delta:number){const d=new Date(year,m-1+delta,1);setMonth(monthKey(d));setDay(null)}
- useEffect(()=>{let live=true;async function load(){if(!supabase)return;const{data:rows,error}=await supabase.from('communication_assets').select('*').order('created_at',{ascending:false});if(live){if(error)setError(error.message);else setAssets(rows||[])}}void load();return()=>{live=false}},[]);
- useEffect(()=>{let live=true;async function sign(){if(!supabase)return;const list=assets.filter(a=>a.review_status!=='DESCARTADA');const signed=await Promise.all(list.map(async a=>{const{data}=await supabase!.storage.from(bucket).createSignedUrl(a.storage_path,300);return[a.id,data?.signedUrl||''] as const}));if(live)setUrls(Object.fromEntries(signed))}void sign();return()=>{live=false}},[assets]);
- async function upload(item:Row,file:File){if(!supabase)return;if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>15*1024*1024){setError('La imagen debe ser JPG, PNG o WebP y pesar como máximo 15 MB.');return}
-  setBusy(item.id);setError('');const path=`${item.id}/${crypto.randomUUID()}-${file.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,90)}`;
-  try{const{error:up}=await supabase.storage.from(bucket).upload(path,file,{contentType:file.type,upsert:false});if(up)throw up;
-   const{data:row,error:saveError}=await supabase.from('communication_assets').insert({item_id:item.id,storage_path:path,file_name:file.name,uploaded_by:(await supabase.auth.getUser()).data.user?.id}).select().single();
-   if(saveError){await supabase.storage.from(bucket).remove([path]);throw saveError}setAssets(old=>[row,...old]);setExpanded(item.id)
-  }catch(e){setError(e instanceof Error?e.message:String(e))}finally{setBusy('')}
+ useEffect(()=>{let live=true;async function load(){if(!supabase)return;const{data:rows,error}=await supabase.from('communication_assets').select('*').order('created_at',{ascending:false});if(live){if(error)setError(error.message);else setAssets(rows||[])}}void load();return()=>{live=false}},[data.communication]);
+ async function upload(item:Row,inputs:UploadInput[]){
+  if(!supabase||!inputs.length||uploadLock.current)return;
+  uploadLock.current=true;setBusy(item.id);setExpanded(item.id);setError('');setNotice('');
+  try{
+   const results=await uploadCommunicationImages(supabase,item.id,inputs,{onProgress:setProgress,onUploaded:addAsset});
+   const failures=results.filter(result=>result.error);
+   setFailed(current=>({...current,[item.id]:[...(current[item.id]||[]).filter(old=>!inputs.some(input=>input.key===old.key)),...failures]}));
+   const count=results.length-failures.length;
+   if(count)setNotice(`${count} ${count===1?'imagen cargada':'imágenes cargadas'} en «${item.title}».`);
+   if(failures.length)setError(failures.map(result=>`${result.file.name}: ${result.error}`).join(' '));
+   await reload();
+  }catch(error){setError(error instanceof Error?error.message:uploadMessage(error));setFailed(current=>({...current,[item.id]:[...(current[item.id]||[]).filter(old=>!inputs.some(input=>input.key===old.key)),...inputs]}));}
+  finally{setBusy('');setProgress(null);uploadLock.current=false;}
  }
  async function review(asset:Row,value:string){if(!supabase)return;const{error}=await supabase.from('communication_assets').update({review_status:value}).eq('id',asset.id);if(error)setError(error.message);else setAssets(old=>old.map(a=>a.id===asset.id?{...a,review_status:value}:a))}
  async function download(asset:Row){if(!supabase)return;const{data,error}=await supabase.storage.from(bucket).download(asset.storage_path);if(error){setError(error.message);return}const url=URL.createObjectURL(data);const a=document.createElement('a');a.href=url;a.download=asset.file_name;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000)}
- async function remove(asset:Row){if(!supabase||!window.confirm(`¿Quitar ${asset.file_name} de esta actividad?`))return;const{error}=await supabase.from('communication_assets').delete().eq('id',asset.id);if(error){setError(error.message);return}setAssets(old=>old.filter(a=>a.id!==asset.id));const{error:storageError}=await supabase.storage.from(bucket).remove([asset.storage_path]);if(storageError)setError('El registro se quitó, pero no se pudo borrar el archivo: '+storageError.message)}
- const card=(item:Row)=><article className="commItem" key={item.id}><div className="commItemTop"><span className={'commKind '+(item.item_type==='COBERTURA_EVENTO'?'coverage':'social')}>{typeLabel(item.item_type)}</span><small>{statusLabel(item.status)}</small></div><h3>{item.title}</h3><p>{dateText(item.target_date)}{item.target_time?` · ${String(item.target_time).slice(0,5)} h`:''}{item.location?` · ${item.location}`:''}</p>{item.responsible&&<small>Responsable: {item.responsible}</small>}{item.channel&&<small>Canal: {item.channel}</small>}<div className="commActions"><button className="ghost" aria-expanded={expanded===item.id} onClick={()=>setExpanded(v=>v===item.id?null:item.id)}>Imágenes ({assets.filter(a=>a.item_id===item.id).length})</button>{canEdit&&<button className="ghost" onClick={()=>setEditor(item)}>Editar</button>}</div>{expanded===item.id&&<div className="commAssetPanel"><p className="muted">Material para revisión y respaldo de la publicación.</p>{canEdit&&<label className="assetUpload"><ImagePlus size={16}/>{busy===item.id?'Subiendo…':'Agregar imágenes'}<input type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy===item.id} onChange={e=>{for(const f of Array.from(e.target.files||[]))void upload(item,f);e.target.value=''}}/></label>}<div className="commImages">{assets.filter(a=>a.item_id===item.id).map(a=><div className="commImage" key={a.id}>{urls[a.id]&&<img src={urls[a.id]} alt={a.file_name}/>}<strong>{a.file_name}</strong><span>{({'EN_REVISION':'En revisión','APROBADA':'Aprobada','DESCARTADA':'Descartada'} as Record<string,string>)[a.review_status]}</span><div className="commActions"><button className="ghost" onClick={()=>void download(a)}><Download size={15}/> Descargar</button>{canEdit&&<><select aria-label={`Revisión de ${a.file_name}`} value={a.review_status} onChange={e=>void review(a,e.target.value)}><option value="EN_REVISION">En revisión</option><option value="APROBADA">Aprobada</option><option value="DESCARTADA">Descartada</option></select><button className="ghost" onClick={()=>void remove(a)}>Quitar</button></>}</div></div>)}</div>{!assets.some(a=>a.item_id===item.id)&&<p className="muted">Todavía no hay imágenes adjuntas.</p>}</div>}</article>;
- return <div className="communicationPage"><section className="card commIntro"><div className="titleRow"><div><span className="eyebrow">SCIT · COMUNICACIÓN</span><h2>Cronograma institucional</h2><p>Publicaciones para redes y cobertura de reuniones, convenios y actividades provinciales.</p></div>{canEdit&&<button className="primary" onClick={()=>setEditor({item_type:'PUBLICACION_RRSS',status:'PLANIFICADO',target_date:day||today})}>+ Nueva actividad</button>}</div><div className="regionPills" aria-label="Tipo de actividad">{[['','Todas'],['PUBLICACION_RRSS','RRSS'],['COBERTURA_EVENTO','Coberturas']].map(([value,label])=><button key={value} className={type===value?'active':''} onClick={()=>setType(value)}>{label}</button>)}</div></section>
+ async function remove(asset:Row){
+  if(!supabase||!window.confirm(`¿Quitar ${asset.file_name} de esta actividad?`))return;
+  setError('');setNotice('');
+  const {error:storageError}=await supabase.storage.from(bucket).remove([asset.storage_path]);
+  if(storageError){setError('No se pudo quitar el archivo. Reintentá cuando tengas conexión.');return;}
+  const {error}=await supabase.from('communication_assets').delete().eq('id',asset.id);
+  if(error){setError('El archivo se quitó, pero falta actualizar su registro. Presioná Quitar nuevamente para completar la eliminación.');return;}
+  setAssets(current=>current.filter(item=>item.id!==asset.id));setNotice('Imagen quitada de la actividad.');
+ }
+ const card=(item:Row)=><article className="commItem" key={item.id}>
+  <div className="commItemTop"><span className={'commKind '+(item.item_type==='COBERTURA_EVENTO'?'coverage':'social')}>{typeLabel(item.item_type)}</span><small>{statusLabel(item.status)}</small></div>
+  <h3>{item.title}</h3><p>{dateText(item.target_date)}{item.target_time?` · ${String(item.target_time).slice(0,5)} h`:''}{item.location?` · ${item.location}`:''}</p>
+  {item.responsible&&<small>Responsable: {item.responsible}</small>}{item.channel&&<small>Canal: {item.channel}</small>}
+  <div className="commActions">{canEdit&&<ImagePicker description={`Cargar imágenes para ${item.title}`} disabled={!!busy} onSelect={files=>void upload(item,files.map(file=>({key:crypto.randomUUID(),file})))}/>}
+   <button type="button" className="ghost" aria-expanded={expanded===item.id} onClick={()=>setExpanded(value=>value===item.id?null:item.id)}>{expanded===item.id?'Ocultar imágenes':'Ver imágenes'} ({assets.filter(asset=>asset.item_id===item.id).length})</button>
+   {canEdit&&<button type="button" className="ghost" disabled={!!busy} onClick={()=>setEditor(item)}>Editar actividad</button>}
+  </div>
+  {progress&&busy===item.id&&<UploadStatus progress={progress}/>}
+  {!!failed[item.id]?.length&&canEdit&&<button type="button" className="ghost commRetry" disabled={!!busy} onClick={()=>void upload(item,failed[item.id])}><RefreshCw size={15}/>Reintentar {failed[item.id].length} {failed[item.id].length===1?'imagen pendiente':'imágenes pendientes'}</button>}
+  {expanded===item.id&&<div className="commAssetPanel"><p className="muted">Imágenes privadas para revisión y respaldo de la publicación. JPG, PNG o WebP de hasta 15 MB.</p>
+   <div className="commImages">{assets.filter(asset=>asset.item_id===item.id).map(asset=><div className="commImage" key={asset.id}><CommunicationImage asset={asset}/><strong>{asset.file_name}</strong><span>{({'EN_REVISION':'En revisión','APROBADA':'Aprobada','DESCARTADA':'Descartada'} as Record<string,string>)[asset.review_status]}</span>
+    <div className="commActions"><button type="button" className="ghost" onClick={()=>void download(asset)}><Download size={15}/>Descargar</button>{canEdit&&<><select aria-label={`Revisión de ${asset.file_name}`} value={asset.review_status} disabled={!!busy} onChange={event=>void review(asset,event.target.value)}><option value="EN_REVISION">En revisión</option><option value="APROBADA">Aprobada</option><option value="DESCARTADA">Descartada</option></select><button type="button" className="ghost" disabled={!!busy} onClick={()=>void remove(asset)}>Quitar</button></>}</div>
+   </div>)}</div>
+   {!assets.some(asset=>asset.item_id===item.id)&&!busy&&<p className="muted">Todavía no hay imágenes adjuntas.{canEdit?' Usá Cargar imágenes o adjuntalas desde Editar actividad.':''}</p>}
+  </div>}
+ </article>;
+ return <div className="communicationPage"><section className="card commIntro"><div className="titleRow"><div><span className="eyebrow">SCIT · COMUNICACIÓN</span><h2>Cronograma institucional</h2><p>Publicaciones para redes y cobertura de reuniones, convenios y actividades provinciales.</p></div>{canEdit&&<button className="primary" disabled={!!busy} onClick={()=>setEditor({item_type:'PUBLICACION_RRSS',status:'PLANIFICADO',target_date:day||today})}>+ Nueva actividad</button>}</div><div className="regionPills" aria-label="Tipo de actividad">{[['','Todas'],['PUBLICACION_RRSS','RRSS'],['COBERTURA_EVENTO','Coberturas']].map(([value,label])=><button key={value} className={type===value?'active':''} onClick={()=>setType(value)}>{label}</button>)}</div></section>
+ {!canEdit&&<p className="muted">Tu cuenta permite consultar imágenes. Para cargar o editar necesitás permisos de gestión.</p>}
  <section className="card commUpcoming"><h2>Próximas 3 actividades</h2>{upcoming.length?<div className="commUpcomingList">{upcoming.map(item=><button key={item.id} onClick={()=>{setMonth(item.target_date.slice(0,7));setDay(item.target_date);setExpanded(item.id)}}><b>{dateText(item.target_date)}{item.target_time?` · ${String(item.target_time).slice(0,5)}`:''}</b><span>{item.title}</span><small>{typeLabel(item.item_type)}</small></button>)}</div>:<p className="muted">No hay próximas actividades cargadas.</p>}</section>
  <section className="card commCalendar"><div className="commMonthHead"><div><CalendarDays size={20}/><h2>{monthTitle}</h2></div><div className="commMonthControls"><button className="ghost" aria-label="Mes anterior" onClick={()=>changeMonth(-1)}><ChevronLeft size={19}/></button><input type="month" aria-label="Elegir mes" value={month} onChange={e=>{if(e.target.value){setMonth(e.target.value);setDay(null)}}}/><button className="ghost" aria-label="Mes siguiente" onClick={()=>changeMonth(1)}><ChevronRight size={19}/></button><button className="ghost" onClick={()=>{setMonth(monthKey(new Date()));setDay(null)}}>Hoy</button></div></div><div className="commWeekdays">{['L','M','M','J','V','S','D'].map((d,i)=><span key={i}>{d}</span>)}</div><div className="commDays">{days.map((key,index)=>key?<button key={key} className={`${key===today?'today':''} ${day===key?'selected':''}`} onClick={()=>setDay(v=>v===key?null:key)} aria-label={`${dateText(key)}, ${filtered.filter(i=>i.target_date===key).length} actividades`}><span>{Number(key.slice(-2))}</span><span className="commDots">{filtered.filter(i=>i.target_date===key).slice(0,3).map(i=><i key={i.id} className={i.item_type==='COBERTURA_EVENTO'?'coverage':'social'}/>)}</span></button>:<span key={'empty'+index}/>)}</div><div className="commLegend"><span><i className="social"/>Publicación RRSS</span><span><i className="coverage"/>Cobertura</span></div></section>
- <section className="card commSchedule"><div className="titleRow"><h2>{day?`Actividades del ${dateText(day)}`:`Actividades de ${monthTitle}`}</h2><span className="muted">{dayItems.length} registradas</span></div>{error&&<p className="error" role="alert">{error}</p>}{dayItems.length?<div className="commItems">{dayItems.map(card)}</div>:<p className="muted">No hay actividades para esta selección.</p>}{!day&&monthItems.length===0&&<p className="muted">Elegí otra fecha o cargá una actividad.</p>}</section>
- {editor!==false&&<Editor title={editor?.id?'Editar actividad':'Nueva actividad'} fields={fields} initial={editor||{}} onClose={()=>setEditor(false)} onSave={async row=>{await save('communication_items',row,editor?.id);await reload();setDay(row.target_date||null);if(row.target_date)setMonth(row.target_date.slice(0,7))}}/>}</div>
+ <section className="card commSchedule"><div className="titleRow"><h2>{day?`Actividades del ${dateText(day)}`:`Actividades de ${monthTitle}`}</h2><span className="muted">{dayItems.length} registradas</span></div>{error&&<p className="error" role="alert">{error}</p>}{notice&&<p className="commUploadNotice" role="status">{notice}</p>}{dayItems.length?<div className="commItems">{dayItems.map(card)}</div>:<p className="muted">No hay actividades para esta selección.</p>}{!day&&monthItems.length===0&&<p className="muted">Elegí otra fecha o cargá una actividad.</p>}</section>
+ {editor!==false&&<CommunicationEditor initial={editor||{}} fields={fields} onClose={()=>setEditor(false)} onUploaded={addAsset} reload={reload} onSaved={item=>{setDay(item.target_date||null);if(item.target_date)setMonth(item.target_date.slice(0,7));setExpanded(item.id);setNotice('Actividad guardada.')}}/>}</div>
 }

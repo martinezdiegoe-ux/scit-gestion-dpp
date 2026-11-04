@@ -45,3 +45,12 @@ La PWA conserva solamente recursos públicos de la aplicación; no almacena resp
 Validación: `npm ci`, `npm run build`, `npm run test:security`, `npm audit`. `tests/security.sql` comprueba las políticas con operaciones en una transacción que termina con ROLLBACK, sin enviar correos ni conservar usuarios de prueba. Se ejecuta con una conexión administrativa y requiere un perfil institucional de lectura existente.
 
 El proyecto mantiene el plan gratuito. La protección de contraseñas filtradas de Supabase requiere Pro; no se cambió el plan. La pantalla para establecer contraseña exige 12 caracteres con mayúsculas, minúsculas, números y símbolos; la misma política ya está configurada en Auth (Authentication → Sign In / Providers → Email), con cambio seguro de contraseña y confirmación de cambios de correo. **Allow new users to sign up** quedó desactivado también en el panel como segunda barrera además del rechazo en la base. Los accesos anónimos continúan desactivados y se exige confirmación del correo.
+
+
+## Imágenes de Comunicación
+
+Cada actividad muestra **Cargar imágenes** directamente en su tarjeta. El formulario de **Nueva actividad** y **Editar actividad** incluye **Seleccionar imágenes**, vistas previas y la posibilidad de quitar archivos antes de guardar. Acepta JPG, PNG y WebP de hasta 15 MB por archivo; se comprueban los bytes del formato incluso cuando el celular no informa el MIME.
+
+Las cargas múltiples se procesan en orden y muestran progreso. Si una falla, se conservan las otras y se puede reintentar la pendiente. Los identificadores se mantienen entre reintentos para recuperar respuestas interrumpidas sin duplicar actividades ni adjuntos. Las miniaturas se descargan con la sesión del usuario y se muestran mediante URLs locales temporales, que se liberan al cerrar la vista. La aprobación, descarga y eliminación están disponibles en **Ver imágenes** según el rol.
+
+No se hicieron públicos los archivos ni se ampliaron permisos. Director, Coordinador y Administrativo pueden cargar; Solo lectura consulta. `npm run test:communication` comprueba el formulario, los controles por rol, formatos, carga secuencial, errores y recuperación de reintentos.
