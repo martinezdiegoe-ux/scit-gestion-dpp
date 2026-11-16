@@ -1,0 +1,44 @@
+.cadStats, .cadColumns, .cadPanel { min-width: 0; }
+.cadHeader h2 { margin: 14px 0; font-size: clamp(1.45rem, 3vw, 2rem); }
+.cadBack, .cadUpload summary { display: flex; align-items: center; gap: 8px; }
+.cadControls { display: flex; gap: 12px; flex-wrap: wrap; }
+.cadControls label, .cadUpload label { display: grid; gap: 6px; font-size: 0.875rem; font-weight: 650; }
+.cadControls select, .cadUpload input { min-height: 40px; min-width: 0; max-width: 100%; }
+.cadUpload summary { cursor: pointer; color: var(--accent); font-weight: 700; }
+.cadUpload p, .cadUpload label, .cadUploadPreview { margin-top: 12px; }
+.cadUpload input { width: min(100%, 480px); }
+.cadUploadPreview li { margin: 4px 0; }
+.cadTabs { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
+.cadTabs button { display: flex; align-items: center; gap: 7px; min-height: 38px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; text-align: left; cursor: pointer; }
+.cadTabs button[aria-pressed="true"] { color: var(--accent); background: var(--panel); border-color: var(--accent); font-weight: 700; }
+.cadKpis, .cadTopicCards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 12px; margin: 0 0 16px; }
+.cadTopicCards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 225px), 1fr)); }
+.cadKpi, .cadTopicCards button { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 15px; border-radius: 13px; background: var(--surface); border: 1px solid var(--border); color: var(--text); text-align: left; }
+.cadTopicCards button { cursor: pointer; }
+.cadTopicCards button:hover { border-color: var(--accent); }
+.cadKpi span, .cadTopicCards span { font-size: 0.875rem; font-weight: 650; }
+.cadKpi strong, .cadTopicCards strong { color: var(--accent); font-size: clamp(1.45rem, 3vw, 2rem); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.cadKpi small, .cadTopicCards small, .cadSources { color: var(--muted); font-size: 0.82rem; }
+.cadColumns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 14px; align-items: start; }
+.cadPanel h3 { margin: 0 0 12px; font-size: 1.03rem; }
+.cadPanel > p { margin-bottom: 12px; }
+.cadSectionTitle { margin: 22px 0 12px; }
+.cadTable th, .cadTable td { padding: 9px 7px; text-align: right; font-variant-numeric: tabular-nums; }
+.cadTable :is(th, td):first-child { text-align: left; white-space: normal; min-width: 6.5rem; }
+.cadTable tbody th { color: var(--text); text-transform: none; font-size: inherit; font-weight: 550; }
+.cadBars { display: grid; gap: 10px; margin: 0 0 10px; }
+.cadBars > div > div:first-child { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; font-size: 0.85rem; }
+.cadTrack { display: flex; height: 7px; background: var(--panel); overflow: hidden; border-radius: 10px; }
+.cadTrack i:first-child { background: var(--accent); }
+.cadTrack i:last-child { background: #197c70; }
+.cadSources { margin: 14px 0; line-height: 1.5; }
+@media (max-width: 1000px) { .cadColumns { grid-template-columns: 1fr; } }
+@media (max-width: 500px) {
+  .cadTabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cadTabs button svg { flex: none; }
+  .cadKpis, .cadTopicCards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.cadBarKey { display: flex; gap: 12px; font-size: 0.75rem; color: var(--muted); }
+.cadBarKey span { display: inline-flex; align-items: center; gap: 5px; }
+.cadBarKey span::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.cadBarKey span + span::before { background: #197c70; }
