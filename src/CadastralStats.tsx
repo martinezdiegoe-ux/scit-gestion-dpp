@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft, BarChart3, ClipboardList, Files, FileCheck2, Map as MapIcon, Upload } from 'lucide-react';
-import { formatDate, lastBalance, sourceNames, sumMetrics, value, weekTotal,
+import { formatDate, lastBalance, latestSnapshotsThrough, sourceNames, sumMetrics, value, weekTotal,
   type FacDetail, type Metric, type Regional, type RegionFilter, type Situation, type Snapshot, type Topic, type Trend, type VepData, type Weekly } from './lib/cadastralStats';
 import { supabase } from './lib/supabase';
 import './cadastralStats.css';
@@ -433,9 +433,7 @@ export default function CadastralStats({ back, canEdit }: { back: () => void; ca
   const cutDate = dates.includes(selected) ? selected : dates[0];
   // Cada fuente conserva su propio último corte disponible hasta la fecha elegida.
   // Una carga parcial no debe ocultar indicadores procedentes de otros informes.
-  const rows = (['situation', 'fac_north', 'fac_south', 'vep'] as const)
-    .map(source => archive.find(row => row.source === source && row.cut_date <= cutDate))
-    .filter((row): row is Snapshot => Boolean(row));
+  const rows = latestSnapshotsThrough(archive, cutDate);
   async function save(snapshots: Snapshot[]) {
     if (!supabase) throw Error('Falta conectar la base de datos.');
     const { error } = await supabase.from('scit_report_cuts').upsert(snapshots, { onConflict: 'cut_date,source' });
