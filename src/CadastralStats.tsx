@@ -113,7 +113,7 @@ function combineFac(north: FacDetail | undefined, south: FacDetail | undefined, 
   return [...grouped.values()];
 }
 
-function FacDetails({ weekly, north, south, region }: { weekly?: Weekly; north?: FacDetail; south?: FacDetail; region: RegionFilter }) {
+function FacDetails({ weekly, north, south, region, comparable }: { weekly?: Weekly; north?: FacDetail; south?: FacDetail; region: RegionFilter; comparable: boolean }) {
   const details = [region === 'south' ? undefined : north, region === 'north' ? undefined : south]
     .filter((item): item is FacDetail => Boolean(item));
   const total = details.reduce((sum, item) => sum + item.total, 0);
@@ -142,7 +142,7 @@ function FacDetails({ weekly, north, south, region }: { weekly?: Weekly; north?:
   const dueToday = details.reduce((sum, detail) => sum + detail.dueToday, 0);
   const reentries = details.reduce((sum, detail) => sum + detail.reentries, 0);
   const weeklyTotals = weekTotal(weekly);
-  const differentDetails = weeklyTotals && ((region !== 'south' && north && north.total !== weeklyTotals.north)
+  const differentDetails = comparable && weeklyTotals && ((region !== 'south' && north && north.total !== weeklyTotals.north)
     || (region !== 'north' && south && south.total !== weeklyTotals.south));
   const surfaceRows = (details[0]?.surfaces ?? []).map(({ label }, index) => ({
     label,
@@ -301,7 +301,9 @@ function TopicDetails({ topic, rows, region, open, archive, cutDate }: {
   const pending = vep?.pending ?? situation?.veps;
   switch (topic) {
     case 'summary': return <Summary situation={situation} vep={vep} north={north} south={south} region={region} open={open} />;
-    case 'fac': return <FacDetails weekly={situation?.fac} north={north} south={south} region={region} />;
+    case 'fac': return <FacDetails weekly={situation?.fac} north={north} south={south} region={region}
+      comparable={rows.filter(row => row.source === 'situation' || row.source === 'fac_north' || row.source === 'fac_south')
+        .every(row => row.cut_date === rows.find(item => item.source === 'situation')?.cut_date)} />;
     case 'vep': {
       if (!pending) return missingSource;
       const facVep = 'Verificación de estado parcelario (VEP)';
