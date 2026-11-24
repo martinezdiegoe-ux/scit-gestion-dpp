@@ -53,6 +53,13 @@ export const sourceNames: Record<Source, string> = {
   vep: 'VEP y lotes para VEP · STE',
 };
 
+export function latestSnapshotsThrough(archive: Snapshot[], cutDate: string): Snapshot[] {
+  return (Object.keys(sourceNames) as Source[])
+    .map(source => archive.filter(row => row.source === source && row.cut_date <= cutDate)
+      .sort((a, b) => b.cut_date.localeCompare(a.cut_date))[0])
+    .filter((row): row is Snapshot => Boolean(row));
+}
+
 export function value(item: Regional, region: RegionFilter) {
   return region === 'all' ? item.north + item.south : item[region];
 }
