@@ -267,8 +267,7 @@ function Summary({ situation, vep, north, south, region, open }: {
   situation?: Situation; vep?: VepData; north?: FacDetail; south?: FacDetail; region: RegionFilter; open: (topic: Topic) => void;
 }) {
   const hasFacDetail = region === 'all' ? Boolean(north && south) : Boolean(region === 'north' ? north : south);
-  const fac = weekTotal(situation?.fac) ?? (hasFacDetail
-    ? { north: north?.total ?? 0, south: south?.total ?? 0 } : undefined);
+  const fac = hasFacDetail ? { north: north?.total ?? 0, south: south?.total ?? 0 } : weekTotal(situation?.fac);
   const vepTotal = vep?.pending ?? situation?.veps;
   const paid = weekTotal(situation?.paid), unpaid = weekTotal(situation?.unpaid);
   const cards: { id: Topic; label: string; item?: Regional; detail: string }[] = [
@@ -430,7 +429,11 @@ export default function CadastralStats({ back, canEdit }: { back: () => void; ca
   }, [load]);
   const dates = [...new Set(archive.map(row => row.cut_date))];
   const cutDate = dates.includes(selected) ? selected : dates[0];
-  const rows = archive.filter(row => row.cut_date === cutDate);
+  // Cada fuente conserva su propio último corte disponible hasta la fecha elegida.
+  // Una carga parcial no debe ocultar indicadores procedentes de otros informes.
+  const rows = (['situation', 'fac_north', 'fac_south', 'vep'] as const)
+    .map(source => archive.find(row => row.source === source && row.cut_date <= cutDate))
+    .filter((row): row is Snapshot => Boolean(row));
   async function save(snapshots: Snapshot[]) {
     if (!supabase) throw Error('Falta conectar la base de datos.');
     const { error } = await supabase.from('scit_report_cuts').upsert(snapshots, { onConflict: 'cut_date,source' });
@@ -460,7 +463,7 @@ export default function CadastralStats({ back, canEdit }: { back: () => void; ca
       <button key={id} aria-pressed={topic === id} onClick={() => setTopic(id)}><Icon size={16} />{name}</button>
     )}</div>
       <TopicDetails topic={topic} rows={rows} region={region} open={setTopic} archive={archive} cutDate={cutDate} />
-      <p className="cadSources"><b>Fuentes del corte</b> · {rows.map(row => sourceNames[row.source]).join(' · ')}</p>
+      <p className="cadSources"><b>Últimos datos disponibles hasta {formatDate(cutDate)}</b> · {rows.map(row => `${sourceNames[row.source]} (${formatDate(row.cut_date)})`).join(' · ')}</p>
     </>}
   </div>;
 }
