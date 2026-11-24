@@ -44,7 +44,7 @@ export type VepData = {
 type SnapshotData = { situation: Situation; fac_north: FacDetail; fac_south: FacDetail; vep: VepData };
 export type Source = keyof SnapshotData;
 export type Snapshot = { [S in Source]: { cut_date: string; source: S; payload: SnapshotData[S] } }[Source];
-export type Topic = 'summary' | 'fac' | 'vep' | 'lots' | 'digital' | 'mensuras' | 'certificates' | 'precec';
+export type Topic = 'summary' | 'management' | 'fac' | 'vep' | 'lots' | 'digital' | 'mensuras' | 'certificates' | 'precec';
 
 export const sourceNames: Record<Source, string> = {
   situation: 'Estado de situación semanal',
