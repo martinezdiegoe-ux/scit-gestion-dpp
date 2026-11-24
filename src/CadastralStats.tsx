@@ -3,10 +3,12 @@ import { ArrowLeft, BarChart3, ClipboardList, Files, FileCheck2, Map as MapIcon,
 import { formatDate, lastBalance, latestSnapshotsThrough, sourceNames, sumMetrics, value, weekTotal,
   type FacDetail, type Metric, type Regional, type RegionFilter, type Situation, type Snapshot, type Topic, type Trend, type VepData, type Weekly } from './lib/cadastralStats';
 import { supabase } from './lib/supabase';
+import { managementRows, type ManagementRow } from './lib/cadastralManagement';
 import './cadastralStats.css';
 
 const topics = [
   { id: 'summary', name: 'Resumen', icon: BarChart3 },
+  { id: 'management', name: 'Seguimiento de gestión', icon: BarChart3 },
   { id: 'fac', name: 'FAC', icon: ClipboardList },
   { id: 'vep', name: 'VEP', icon: FileCheck2 },
   { id: 'lots', name: 'Lotes para VEP · STE', icon: MapIcon },
@@ -22,6 +24,39 @@ const pct = (numerator: number, denominator: number) =>
 const metric = (label: string, item: Regional): Metric => ({ label, ...item });
 const stagesByVolume = (items: Metric[], region: RegionFilter) =>
   [...items].sort((a, b) => value(b, region) - value(a, region));
+
+function Management({ archive, cutDate, region }: { archive: Snapshot[]; cutDate: string; region: RegionFilter }) {
+  const rows = managementRows(archive, cutDate).filter(row => region === 'all' || row.region === region);
+  const situationRow = latestSnapshotsThrough(archive, cutDate).find(row => row.source === 'situation');
+  const facFlow = situationRow?.payload.fac.flow.at(-1);
+  const delta = (row: ManagementRow, current: number, previous?: number) => previous === undefined ? 'Sin corte anterior' :
+    `${current - previous > 0 ? '+' : ''}${nf(current - previous)} desde ${formatDate(row.previousDate!)}`;
+  return <>
+    <p className="muted">Cada trámite se compara con su corte anterior de la misma fuente y regional. Las fechas pueden ser diferentes.</p>
+    <div className="cadManagement">
+      {rows.map(row => <article className="card cadManagementCard" key={`${row.source}-${row.region}`}>
+        <div className="cadManagementTitle"><h3>{row.source} · {row.region === 'north' ? 'Norte' : 'Sur'}</h3>
+          <span className={`cadSignal cadSignal-${row.signal}`}>{row.signal === 'red' ? 'Revisar aumento' : row.signal === 'amber' ? row.source === 'FAC' ? 'Vencidos pendientes' : 'Sin variación' : row.signal === 'green' ? 'Mejora' : 'Sin comparación'}</span></div>
+        <small>Corte {formatDate(row.date)}{row.previousDate ? ` · anterior ${formatDate(row.previousDate)}` : ''}</small>
+        <div className="cadManagementNumbers"><div><span>Pendientes</span><strong>{nf(row.pending)}</strong><small>{delta(row, row.pending, row.previousPending)}</small></div>
+          {row.overdue !== undefined && <div><span>Vencidos</span><strong>{nf(row.overdue)}</strong>
+            <small>{pct(row.overdue, row.pending)} · {delta(row, row.overdue, row.previousOverdue)}</small></div>}
+          {row.olderThanSeven !== undefined && <div><span>Más de 7 días desde solicitud</span><strong>{nf(row.olderThanSeven)}</strong>
+            <small>{pct(row.olderThanSeven, row.pending)} del detalle FAC</small></div>}</div>
+        {row.topReasons && <div className="cadManagementReasons"><b>Motivos con más pendientes</b>
+          <ol>{row.topReasons.map(reason => <li key={reason.label}>{reason.label}: <strong>{nf(reason.count)}</strong></li>)}</ol></div>}
+      </article>)}
+    </div>
+    {!rows.length && <p className="muted">No hay FAC o VEP cargados hasta este corte.</p>}
+    <p className="cadManagementNote">FAC: rojo si aumentan los vencidos, ámbar si quedan vencidos y no aumentaron, verde si no quedan vencidos. VEP: rojo si aumentan los pendientes, ámbar si no cambian, verde si disminuyen. Los colores describen variaciones; no miden productividad.</p>
+    <Panel title="Ingresos y aprobaciones FAC" note={facFlow
+      ? `Última semana informada: ${facFlow.period}. Fuente: Estado de situación del ${formatDate(situationRow!.cut_date)}. Las aprobaciones pueden corresponder a ingresos anteriores.`
+      : 'Todavía no hay un informe de ingresos y aprobaciones para este período.'}>
+      {facFlow ? <MetricTable items={facFlow.metrics.filter(item => /ingresad|aprobad|observad|rechazad/i.test(item.label))}
+        region={region} /> : <p>El listado de pendientes por sí solo no permite calcular cuántas solicitudes se resolvieron.</p>}
+    </Panel>
+  </>;
+}
 
 function KPIs({ items }: { items: { label: string; amount: string; detail?: string }[] }) {
   return <div className="cadKpis">{items.map(({ label, amount, detail }) =>
@@ -301,6 +336,7 @@ function TopicDetails({ topic, rows, region, open, archive, cutDate }: {
   const pending = vep?.pending ?? situation?.veps;
   switch (topic) {
     case 'summary': return <Summary situation={situation} vep={vep} north={north} south={south} region={region} open={open} />;
+    case 'management': return <Management archive={archive} cutDate={cutDate} region={region} />;
     case 'fac': return <FacDetails weekly={situation?.fac} north={north} south={south} region={region}
       comparable={rows.filter(row => row.source === 'situation' || row.source === 'fac_north' || row.source === 'fac_south')
         .every(row => row.cut_date === rows.find(item => item.source === 'situation')?.cut_date)} />;
