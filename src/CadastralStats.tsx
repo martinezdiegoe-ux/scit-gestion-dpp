@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft, BarChart3, ClipboardList, Files, FileCheck2, Map as MapIcon, Upload } from 'lucide-react';
-import { formatDate, lastBalance, latestSnapshotsThrough, sourceNames, sumMetrics, value, weekTotal,
+import { formatDate, functionalUnitSeries, lastBalance, latestSnapshotsThrough, sourceNames, sumMetrics, value, weekTotal,
   type FacDetail, type Metric, type Regional, type RegionFilter, type Situation, type Snapshot, type Topic, type Trend, type VepData, type Weekly } from './lib/cadastralStats';
 import { supabase } from './lib/supabase';
 import { managementRows, type ManagementRow } from './lib/cadastralManagement';
@@ -321,7 +321,7 @@ function Summary({ situation, vep, north, south, region, open }: {
 
 const missingSource = <section className="card"><p>El corte seleccionado no incluye un informe para este tema.</p></section>;
 
-function TopicDetails({ topic, rows, region, open, archive, cutDate }: {
+export function TopicDetails({ topic, rows, region, open, archive, cutDate }: {
   topic: Topic; rows: Snapshot[]; region: RegionFilter; open: (topic: Topic) => void; archive: Snapshot[]; cutDate: string;
 }) {
   const situation = rows.find(row => row.source === 'situation')?.payload;
@@ -420,7 +420,7 @@ function TopicDetails({ topic, rows, region, open, archive, cutDate }: {
         <WeeklyDetails title="Certificados web impagos" weekly={situation.unpaid} region={region} days={5} />
         <div className="cadColumns">
           <SeriesTable title="Certificados presenciales emitidos" series={situation.inPerson} region={region} />
-          <SeriesTable title="Unidades funcionales en proceso" series={situation.functionalUnits} region={region} />
+          <SeriesTable title="Unidades funcionales en proceso" series={functionalUnitSeries(situation.functionalUnits)} region={region} />
         </div>
         {situation.certificateNotes.length > 0 && <Panel title="Certificados por VEP y perimidos"><MetricTable items={situation.certificateNotes} region={region} /></Panel>}
       </>;

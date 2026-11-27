@@ -1,12 +1,51 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'vite';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
+const originalWindow = globalThis.window;
+globalThis.window = { location: { hash: '', search: '' }, localStorage: { length: 0, key() { return null; } } };
 const server = await createServer({ server: { middlewareMode: true }, optimizeDeps: { noDiscovery: true, include: [] }, appType: 'custom', logLevel: 'silent' });
 try {
-  const { latestSnapshotsThrough, sumMetrics } = await server.ssrLoadModule('/src/lib/cadastralStats.ts');
+  const { latestSnapshotsThrough, sumMetrics, functionalUnitSeries } = await server.ssrLoadModule('/src/lib/cadastralStats.ts');
+  const { TopicDetails } = await server.ssrLoadModule('/src/CadastralStats.tsx');
   const { managementRows } = await server.ssrLoadModule('/src/lib/cadastralManagement.ts');
   const snapshot = (source, cut_date, payload = {}) => ({ source, cut_date, payload });
+
+  test('certificates open with stored regional functional-unit periods in every regional filter', () => {
+    const weekly = metrics => ({ balance: [{ period: '24/11/2026', metrics }],
+      stages: [], delayedStages: [], flow: [], stageDiscrepancies: [] });
+    const row = snapshot('situation', '2026-11-24', {
+      paid: weekly([{ label: 'Vencidas', north: 316, south: 73 }, { label: 'En término', north: 574, south: 337 }]),
+      unpaid: weekly([{ label: 'Vencidas', north: 463, south: 852 }, { label: 'En término', north: 493, south: 573 }]),
+      inPerson: [], certificateNotes: [],
+      // Forma persistida en el corte del 24/11 que antes hacía fallar SeriesTable.
+      functionalUnits: [
+        { date: '2026-11-16', period: '16/11/2026', north: 231, south: 812 },
+        { date: '2026-11-24', period: '24/11/2026', north: 227, south: 701 },
+      ],
+    });
+    const original = structuredClone(row);
+    for (const [region, total, units] of [['all', '3.681', '928'], ['north', '1.846', '227'], ['south', '1.835', '701']]) {
+      const html = renderToStaticMarkup(React.createElement(TopicDetails, {
+        topic: 'certificates', rows: [row], region, open() {}, archive: [row], cutDate: row.cut_date,
+      }));
+      assert.ok(html.includes(`<strong>${total}</strong>`));
+      assert.match(html, /Unidades funcionales en proceso/);
+      assert.match(html, /Solicitudes en proceso/);
+      assert.ok(html.includes(`<td>${units}</td>`));
+    }
+    assert.deepEqual(row, original, 'rendering must not change stored statistics');
+  });
+
+  test('functional-unit series preserve imported metrics and empty historical series', () => {
+    const imported = [{ date: '2026-11-24', period: '24/11/2026',
+      metrics: [{ label: 'Solicitudes en proceso', north: 227, south: 701 }] }];
+    assert.deepEqual(functionalUnitSeries(imported), imported);
+    assert.deepEqual(functionalUnitSeries([]), []);
+    assert.deepEqual(functionalUnitSeries([{ date: '2026-11-24', period: '24/11/2026', north: 227, south: 701 }]), imported);
+  });
 
   test('partial weekly loads keep the latest available value of every source', () => {
     const prior = snapshot('situation', '2026-11-16', { digitalPlans: { north: 244, south: 532 }, mensuras: [{ north: 2, south: 3 }] });
@@ -45,4 +84,5 @@ try {
 
 } finally {
   await server.close();
+  globalThis.window = originalWindow;
 }

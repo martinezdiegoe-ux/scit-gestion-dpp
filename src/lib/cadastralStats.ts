@@ -3,6 +3,8 @@ export type RegionFilter = Region | 'all';
 export type Regional = Record<Region, number>;
 export type Metric = Regional & { label: string };
 export type Trend = { period: string; date?: string; metrics: Metric[] };
+// Algunos cortes guardados tienen los valores regionales directamente en el período.
+export type FunctionalUnitTrend = Trend | (Pick<Trend, 'period' | 'date'> & Regional);
 export type Surface = { label: string; records: number; value: number };
 export type FacDetail = {
   total: number;
@@ -27,7 +29,7 @@ export type Situation = {
   unpaid: Weekly;
   precec: Weekly;
   inPerson: Trend[];
-  functionalUnits: Trend[];
+  functionalUnits: FunctionalUnitTrend[];
   certificateNotes: Metric[];
   mensuras: Metric[];
   digitalPlans: Regional;
@@ -77,6 +79,14 @@ export function lastBalance(weekly?: Weekly) {
 export function weekTotal(weekly?: Weekly) {
   const balance = lastBalance(weekly);
   return balance && sumMetrics(balance);
+}
+
+export function functionalUnitSeries(series: FunctionalUnitTrend[]): Trend[] {
+  return series.map(period => 'metrics' in period ? period : {
+    period: period.period,
+    date: period.date,
+    metrics: [{ label: 'Solicitudes en proceso', north: period.north, south: period.south }],
+  });
 }
 
 export function formatDate(iso: string) {
